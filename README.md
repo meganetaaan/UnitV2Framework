@@ -1,5 +1,12 @@
 # M5 UnitV2 Framework
 
+## Build
+
+```
+cmake -DOPENCV_DIR=/external/opencv/platforms/linux/build -DTARGET=camera_stream .
+make
+```
+
 ## Toolchain
 
 gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz

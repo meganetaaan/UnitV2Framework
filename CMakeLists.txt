@@ -1,6 +1,6 @@
 # set compiler
-set(CMAKE_CXX_COMPILER arm-none-linux-gnueabihf-g++)
-set(CMAKE_C_COMPILER arm-none-linux-gnueabihf-gcc)
+set(CMAKE_CXX_COMPILER arm-linux-gnueabihf-g++)
+set(CMAKE_C_COMPILER arm-linux-gnueabihf-gcc)
 
 if(NOT CMAKE_BUILD_TYPE)
   set(CMAKE_BUILD_TYPE Release)
@@ -16,14 +16,15 @@ cmake_minimum_required(VERSION 3.5)
 
 # set the directory of executable files
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/bin)
-set(OpenCV_DIR <YOUR OPENCV DIR>)
+set(OpenCV_DIR ${OPENCV_DIR})
+set(Target ${TARGET})
 
 # find required opencv
 find_package(OpenCV REQUIRED)
 # directory of opencv headers
 include_directories(${OpenCV_INCLUDE_DIRS})
 # name of executable file and path of source file
-add_executable(example main/<YOUR TARGET>.cpp)
+add_executable(example main/${Target}.cpp)
 # directory of opencv library
 link_directories(${OpenCV_LIBRARY_DIRS})
 # opencv libraries
