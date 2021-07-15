@@ -1,4 +1,4 @@
-/lib
+/lib/lib*
 /bin
 CMakeCache.txt
 cmake_install.cmake
