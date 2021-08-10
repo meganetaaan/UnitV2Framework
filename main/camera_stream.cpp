@@ -1,6 +1,7 @@
 #include <opencv2/core/utility.hpp>
 #include <opencv2/tracking.hpp>
 #include <opencv2/highgui.hpp>
+#include <opencv2/imgproc/types_c.h>
 #include <iostream>
 #include <cstring>
 #include "framework.h"
@@ -51,7 +52,9 @@ int main( int argc, char** argv )
             }
         }
 
-        sendMat(mat_src);
+        Mat gray_img;
+        cvtColor(mat_src, gray_img, CV_BGR2GRAY);
+        sendMat(gray_img);
     }
     
     return 0;

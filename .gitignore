@@ -5,3 +5,5 @@ cmake_install.cmake
 lib*.a
 Makefile
 /CMakeFiles
+/extern
+/tmp
