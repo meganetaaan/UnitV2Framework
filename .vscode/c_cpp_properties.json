@@ -4,7 +4,7 @@
             "name": "Linux",
             "includePath": [
                 "${workspaceFolder}/**",
-                "/external/opencv/platforms/linux/build/install/include/opencv4",
+                "/external/opencv/platforms/linux/build/install/include/opencv4/opencv2",
                 "${workspaceFolder}/include",
                 "${workspaceFolder}/include/ncnn"
             ],
