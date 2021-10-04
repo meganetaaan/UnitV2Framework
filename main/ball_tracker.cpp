@@ -1,62 +1,85 @@
-#include <opencv2/core/core.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/core/core.hpp> // OpenCVのコア機能群
+#include <opencv2/highgui/highgui.hpp> // 高レベルGUI。imshowとかwindow系のAPIはここ。
+#include <opencv2/imgproc/imgproc.hpp> // 画像処理API。膨張収縮処理、Hough変換など
 #include <iostream>
-#include <cstring>
+#include <cstring> // 文字列（String）操作
 #include "framework.h"
 
-#define IMAGE_DIV 2
+#define IMAGE_DIV 2 // TODO
 
 enum
 {
     IMAGE_FEED_MODE_RGB,
-    IMAGE_FEED_MODE_MASK
+    IMAGE_FEED_MODE_MASK // TODO
 };
 
-// int image_feed_mode = IMAGE_FEED_MODE_RGB;
-int image_feed_mode = IMAGE_FEED_MODE_MASK;
+int image_feed_mode = IMAGE_FEED_MODE_RGB; // ファイルスコープでよい？
 
+// LAB色空間（人間の色覚に近い）ベースで色の範囲を決めている
 uint8_t l_min = 0, l_max = 255;
 uint8_t a_min = 102, a_max = 240;
 uint8_t b_min = 160, b_max = 205;
 
+/**
+ * @brief あらかじめ設定された色の物体を認識する
+ * @result 無し
+ * @param image 処理対象の画像（BGR）
+ * @param mat_mask マスク画像の格納先（バイナリ）
+ * @param center 画像上での位置の格納先
+ * @param radius 認識した円の半径の格納先
+ * @param mcenter TODO
+ */
 void process(cv::Mat &image, cv::Mat &mat_mask, cv::Point2f &center, float &radius, cv::Point &mcenter)
 {
+    // LAB色空間への変換
     cv::Mat image_lab;
     cv::cvtColor(image, image_lab, cv::COLOR_BGR2Lab);
+
+    // labの最小値、最大値を与えてマスク処理
     cv::inRange(image_lab, cv::Scalar(l_min, a_min, b_min), cv::Scalar(l_max, a_max, b_max), mat_mask);
-    cv::morphologyEx(mat_mask, mat_mask, cv::MORPH_OPEN, getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5)));
+
+    // 膨張処理
+    cv::morphologyEx(mat_mask, mat_mask/* 入出力の画像同じで上書き */, cv::MORPH_OPEN, /* それぞれ5x5ピクセルの矩形に膨張 */ getStructuringElement(cv::MORPH_RECT, cv::Size(5, 5)));
+
+    // 認識した塊の二次元配列
     std::vector<std::vector<cv::Point>> contours;
+
+    // バイナリ画像からの領域抽出
     std::vector<cv::Point> max_contour;
-    std::vector<cv::Vec4i> hireachy;
-    cv::findContours(mat_mask, contours, hireachy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE, cv::Point(0,0));
+    std::vector<cv::Vec4i> hireachy; // TODO
+    cv::findContours(mat_mask, contours, hireachy, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE, cv::Point(0, 0)));
 
     if (contours.size() > 0)
     {
         double maxArea=0;
+        // 面積最大の領域をみつける
+        // NOTE: しきい値以上に変更する
         for (int i = 0; i < contours.size(); i++)
         {
+            // TODO: areaの単位は？しきい値をどう設定するか？
             double area = cv::contourArea(contours[i]);
-            if (area > maxArea)
             {
                 maxArea = area;
                 max_contour = contours[i];
             }
         }
 
+        // 領域を円とみなして中心点と半径を計算する
         cv::minEnclosingCircle(max_contour, center, radius);
 
+        // 領域の重心点を計算する
         cv::Moments m = cv::moments(max_contour);
-        mcenter.x = int(m.m10 / m.m00);
+        mcenter.x = int(m.m10 / m.m00); // TODO: mXXの対応関係
         mcenter.y = int(m.m01 / m.m00);
     }
     else
     {
-        RD_clear();
+        RD_Clear();
     }
+
 }
 
-void KmeansColorQuantization(cv::Mat image, int clusternum, cv::Point2f &max_center, float &variance_a, float &variance_b)
+void KmeansColorQuantization(cv::Mat image, int clusternum, cv::Point2f &max_center, float & variance_a, float &variance_b)
 {
     cv::Mat image_lab;
     cv::cvtColor(image, image_lab, cv::COLOR_BGR2Lab);
@@ -74,28 +97,30 @@ void KmeansColorQuantization(cv::Mat image, int clusternum, cv::Point2f &max_cen
 
             points.at<float>(idx, 0) = lab.val[1];
             points.at<float>(idx, 1) = lab.val[2];
-            idx++;
         }
     }
 
     double compactness = kmeans(points, clusternum, labels,
-            cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 10, 1.0),
-               3, cv::KMEANS_PP_CENTERS, centers);
-
+                                cv::TermCriteria(cv::TermCriteria::EPS + cv::TermCriteria::COUNT, 10, 1.0),
+                                3, cv::KMEANS_PP_CENTERS, centers);
+    
     fprintf(stderr, "compactness = %lf\n", compactness);
 
     int cluster_idx_count[clusternum];
-    memset(cluster_idx_count, 0, sizeof(int) * clusternum);
+    memset(cluster_idx_count, 0, sizeof(int) * clusternum); // ゼロ埋め
 
-    for(int i = 0; i < total_points; i++ )
+    // クラスタ毎のピクセル数をカウントしている
+    for(int i = 0; i < total_points; i++)
     {
         cluster_idx_count[labels.at<int>(i)]++;
     }
 
     int max_count = 0;
     int max_idx = 0;
+    // 一番ピクセル数が多いクラスタを求めている
     for(int i = 0; i < clusternum; i++)
     {
+        // クラスタの中心点、インデックス、ピクセル数
         fprintf(stderr, "%.1f, %.1f, %d, %d\n", centers[i].x, centers[i].y, i, cluster_idx_count[i]);
         if(cluster_idx_count[i] > max_count)
         {
@@ -106,15 +131,16 @@ void KmeansColorQuantization(cv::Mat image, int clusternum, cv::Point2f &max_cen
 
     int dbuf[max_count][2];
     idx = 0;
+    // 最大のクラスタのLとAを抽出している
     for(int i = 0; i < total_points; i++)
     {
         if(labels.at<int>(i) == max_idx)
         {
+            // LとAを抽出
             int a = (int)(points.at<float>(i, 0));
             int b = (int)(points.at<float>(i, 1));
-            // int da = abs((int)(centers[max_idx].x) - a);
-            // int db = abs((int)(centers[max_idx].y) - b);
-            // int d = da > db ? da : db;
+
+            // クラスタ中心との差分を計算
             dbuf[idx][0] = abs((int)(centers[max_idx].x) - a);
             dbuf[idx][1] = abs((int)(centers[max_idx].y) - b);
             idx++;
@@ -127,9 +153,11 @@ void KmeansColorQuantization(cv::Mat image, int clusternum, cv::Point2f &max_cen
         suma += dbuf[i][0];
         sumb += dbuf[i][1];
     }
+    // 全ピクセルの中心からの距離の平均->どれくらいクラスタ付近にまとまっているかの指標？
     int avga = (int)((float)suma / (float)(max_count));
     int avgb = (int)((float)sumb / (float)(max_count));
 
+    // 分散を求めている
     uint64_t square_suma = 0, square_sumb = 0;
     for(int i = 0; i < max_count; i++)
     {
@@ -147,18 +175,6 @@ void KmeansColorQuantization(cv::Mat image, int clusternum, cv::Point2f &max_cen
 
 int main(int argc, char **argv)
 {
-    // cv::Mat image;
-
-    // image = cv::imread("./images/test.jpg");
-
-    // cv::Point2f result;
-    // float variance_a, variance_b;
-    // KmeansColorQuantization(image, 2, result, variance_a, variance_b);
-
-    // fprintf(stderr, "%f, %f, %f, %f\n", result.x, result.y, variance_a, variance_b);
-
-    // return 0;
-
     startFramework("Color Tracker", 640, 480);
 
     char strbuf[30];
@@ -167,12 +183,12 @@ int main(int argc, char **argv)
         double t_start = ncnn::get_current_time();
         cv::Mat mat_src;
         getMat(mat_src);
-
         cv::Mat mat_div;
+        // 縦横IMAGE_DIV分の1に縮小している
         cv::resize(mat_src, mat_div, cv::Size(), 1.0f / IMAGE_DIV, 1.0f / IMAGE_DIV, cv::INTER_AREA);
 
         std::string payload;
-        if(readPIPE(payload))
+        if (readPIPE(payload))
         {
             try
             {
@@ -182,10 +198,10 @@ int main(int argc, char **argv)
                 {
                     if(doc["config"] == getFunctionName() || doc["config"] == "web_update_data")
                     {
-                        if(doc.containsKey("l_min"))
+                        if(doc.containsKey("l_min")) // 直接LABの最大値を更新している
                         {
                             uint8_t _l_min = doc["l_min"];
-                            uint8_t _l_max = doc["l_max"];
+                            uint8_t _l_max = doc["l_max"]; // uint8でいいのか
                             uint8_t _a_min = doc["a_min"];
                             uint8_t _a_max = doc["a_max"];
                             uint8_t _b_min = doc["b_min"];
@@ -196,10 +212,11 @@ int main(int argc, char **argv)
                             a_max = _a_max;
                             b_min = _b_min;
                             b_max = _b_max;
-                            sendPIPEMessage("Data updated.");
+                            sendPIPEMessage("Data udpated.");
                         }
                         else if(doc.containsKey("mode"))
                         {
+                            // 配信する画像がマスク画像かRGBか選べる
                             if(doc["mode"] == "mask")
                             {
                                 image_feed_mode = IMAGE_FEED_MODE_MASK;
@@ -211,8 +228,6 @@ int main(int argc, char **argv)
                         }
                         else
                         {
-                            // 色指定処理
-                            // 指定された矩形を画像から切り出し
                             cv::Rect roi;
                             roi.x = doc["x"].as<int>();
                             roi.y = doc["y"].as<int>();
@@ -222,26 +237,28 @@ int main(int argc, char **argv)
                             roi.y /= IMAGE_DIV;
                             roi.width /= IMAGE_DIV;
                             roi.height /= IMAGE_DIV;
+                            // こうやってROI切り出せるのか！
                             cv::Mat cut = mat_div(roi).clone();
-                            // imwrite("temp.jpg", cut);
                             float variance_a, variance_b;
                             cv::Point2f result;
-                            // 最も大きいクラスタの中心点、L値とA値の分散を求めている
+                            // 2つのクラスタに分けている→ROI内の最大のオブジェクトを抽出している！
                             KmeansColorQuantization(cut, 2, result, variance_a, variance_b);
-                            int delta_a = 10 + (int)(variance_a / 2.0f);
-                            int delta_b = 10 + (int)(variance_b / 2.0f);
+                            // LAB色空間のAとBだけ取り出す→色認識の際、明るさの違いには頑健！
+                            // オブジェクト内の色の分散+αのバリエーションをもたせている。
+                            int delta_a = 10 + (int)(variance_a / 2.0f); // TODO: ?
+                            int delta_b = 10 + (int)(variance_b / 2.0f); // TODO: ??
                             int a = (int)(result.x);
                             int b = (int)(result.y);
                             l_min = 0;
                             l_max = 255;
                             a_min = a - delta_a < 0 ? 0 : a - delta_a;
-                            a_max = a + delta_a > 255 ? 255: a + delta_a;
+                            a_max = a + delta_a > 255 ? 255 : a + delta_a;
                             b_min = b - delta_b < 0 ? 0 : b - delta_b;
                             b_max = b + delta_b > 255 ? 255 : b + delta_b;
                             char buf[128];
 
+                            // 設定結果の格納？
                             DynamicJsonDocument doc2(2048);
-                            // sprintf(buf, "Data updated. A = %.0f, B = %.0f, vA = %.2f, vB = %.2f", result.x, result.y, variance_a, variance_b);
 
                             doc2["a_cal"] = result.x;
                             doc2["b_cal"] = result.y;
@@ -261,33 +278,33 @@ int main(int argc, char **argv)
                     }
                 }
             }
-            catch(...)
+            catch(...) // TODO !?!?
             {
                 fprintf(stderr, "[ERROR] Can not parse json.");
             }
         }
-        
-        
+
+
         cv::Point2f center;
-	    float radius=0;
+        float radius = 0;
         cv::Point mcenter;
         cv::Mat mat_mask;
         process(mat_div, mat_mask, center, radius, mcenter);
 
         if(isStreamOpend() && radius != 0)
         {
-        #ifdef LOCAL_RENDER
-            cv::circle(mat_div, cv::Point(center.x, center.y), (int)radius, cv::Scalar(0,255,0), 2);
+            #ifdef LOCAL_RENDER
+            cv::circle(mat_div, cv::Point(center.x, center.y), (int)radius, cv::Scalar(0, 255, 0), 2);
             cv::circle(mat_div, mcenter, 2, cv::Scalar(0, 255, 0), -1);
-        #else
+            #else
             RD_addCircle(center.x, center.y, radius, "#00CD00", IMAGE_DIV);
             RD_addPoint(mcenter.x, mcenter.y, "#00CD00", IMAGE_DIV);
-        #endif
+            #endif
         }
-
 
         DynamicJsonDocument doc(1024);
 
+        // TODO: doc["hoge"] -> 辞書？
         doc["cx"] = center.x * IMAGE_DIV;
         doc["cy"] = center.y * IMAGE_DIV;
         doc["r"] = (int)radius * IMAGE_DIV;
