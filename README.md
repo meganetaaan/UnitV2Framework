@@ -2,12 +2,24 @@
 
 ## Build
 
+[VSCode devcontainer](https://code.visualstudio.com/docs/remote/containers) is recommended.
+
+build for x64 architecture(for debugging)
 ```
-cmake -DOPENCV_DIR=/external/opencv/platforms/linux/build -DTARGET=camera_stream .
-make
+cmake -B build/x64 -DOPENCV_DIR=/external/opencv/build/x64/ -DCMAKE_TOOLCHAIN_FILE=./platforms/x64.toolchain.cmake -DTARGET=camera_stream .
+cmake --build build/x64
+```
+
+build for armhf architecture(UnitV2)
+
+```
+cmake -B build/arm -DOPENCV_DIR=/external/opencv/build/arm/ -DCMAKE_TOOLCHAIN_FILE=./platforms/arm.toolchain.cmake -DTARGET=camera_stream .
+cmake --build build/arm
 ```
 
 ## Toolchain
+
+All dependencies are included in development container (see [Dockerfile](./.devcontainer/Dockerfile))
 
 gcc-arm-10.2-2020.11-x86_64-arm-none-linux-gnueabihf.tar.xz
 
